@@ -1,6 +1,100 @@
- <body style="background-color:powderblue;">
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>passradials</title>
+	<style>
+		body { font-family: system-ui, sans-serif; margin: 20px; }
+		header { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+		select { font-size: 16px; padding: 6px 10px; }
+		#imgWrap { margin-top: 16px; }
+		img { max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); }
+		#meta { margin-top: 8px; color: #555; font-size: 14px; }
+		#status { margin-top: 12px; color: #a00; }
+	</style>
+</head>
+<body>
+	<header>
+		<h1 style="margin:0;">passradials</h1>
+		<label for="gameSelect">Game:</label>
+		<select id="gameSelect" disabled>
+			<option>Loading games…</option>
+		</select>
+	</header>
 
-<h1>Pass Radials</h1>
-<p>Explanation of pass radials here</p>
+	<div id="imgWrap">
+		<img id="preview" alt="Select a game to view its radial" />
+		<div id="meta"></div>
+		<div id="status" role="status" aria-live="polite"></div>
+	</div>
 
-</body> 
+	<script>
+		(async function () {
+			const q = new URLSearchParams(location.search);
+			const initialId = q.get("id");
+			const select = document.getElementById("gameSelect");
+			const img = document.getElementById("preview");
+			const meta = document.getElementById("meta");
+			const status = document.getElementById("status");
+
+			const INDEX_URL = "data/index.json";
+
+			function labelOf(item) {
+				return `${item.date} • ${item.league} — ${item.home} vs ${item.away}`;
+			}
+
+			function setStatus(msg) {
+				status.textContent = msg || "";
+			}
+
+			function show(item) {
+				if (!item) return;
+				img.src = item.img;
+				img.alt = `Pass radials: ${item.home} vs ${item.away} (${item.date}, ${item.league})`;
+				meta.textContent = labelOf(item);
+				const url = new URL(location.href);
+				url.searchParams.set("id", item.id);
+				history.replaceState(null, "", url);
+			}
+
+			try {
+				const res = await fetch(INDEX_URL, { cache: "no-store" });
+				if (!res.ok) throw new Error(`Failed to load index: ${res.status}`);
+				const data = await res.json();
+
+				// Populate dropdown
+				select.innerHTML = "";
+				for (const item of data) {
+					const opt = document.createElement("option");
+					opt.value = item.id;
+					opt.textContent = labelOf(item);
+					select.appendChild(opt);
+				}
+				select.disabled = false;
+
+				// Choose initial item
+				let current = data[0];
+				if (initialId) {
+					const found = data.find(d => d.id === initialId);
+					if (found) current = found;
+				}
+				select.value = current.id;
+				show(current);
+
+				// Handle change
+				select.addEventListener("change", () => {
+					const next = data.find(d => d.id === select.value);
+					show(next);
+				});
+
+				// Basic 404 handler for images
+				img.addEventListener("error", () => setStatus("Couldn't load that image (404)."));
+				img.addEventListener("load", () => setStatus(""));
+			} catch (err) {
+				setStatus(err.message);
+			}
+		})();
+	</script>
+</body>
+</html>
