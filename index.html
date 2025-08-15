@@ -45,28 +45,40 @@
 	</div>
 
 	<script>
+		const SLUG_RE = /^(?<country>[a-z]+)-(?<comp>[a-z-]+)-(?<y1>\d{4})-(?<y2>\d{4})-(?<h>[a-z-]+)-(?<a>[a-z-]+)\.png$/;
+
+		function titleCase(slug) {
+			return slug.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+		}
+
+		function labelFromPath(path) {
+			// expects "img/<slug>.png"
+			const fname = path.split("/").pop();
+			const m = fname.match(SLUG_RE);
+			if (!m) return fname;
+			const { country, comp, y1, y2, h, a } = m.groups;
+			return `${y1}\u2013${y2} • ${titleCase(country)} ${titleCase(comp)} — ${titleCase(h)} vs ${titleCase(a)}`;
+		}
+
+		function setStatus(msg) {
+			document.getElementById("status").textContent = msg || "";
+		}
+
 		(async function () {
 			const q = new URLSearchParams(location.search);
 			const initialId = q.get("id");
 			const select = document.getElementById("gameSelect");
 			const img = document.getElementById("preview");
 			const meta = document.getElementById("meta");
-			const status = document.getElementById("status");
-
-			const INDEX_URL = "data/index.json";
 
 			function labelOf(item) {
-				return `${item.date} • ${item.league} — ${item.home} vs ${item.away}`;
-			}
-
-			function setStatus(msg) {
-				status.textContent = msg || "";
+				return item.label || labelFromPath(item.img);
 			}
 
 			function show(item) {
 				if (!item) return;
 				img.src = item.img;
-				img.alt = `Pass radials: ${item.home} vs ${item.away} (${item.date}, ${item.league})`;
+				img.alt = labelOf(item);
 				meta.textContent = labelOf(item);
 				const url = new URL(location.href);
 				url.searchParams.set("id", item.id);
@@ -74,11 +86,10 @@
 			}
 
 			try {
-				const res = await fetch(INDEX_URL, { cache: "no-store" });
-				if (!res.ok) throw new Error(`Failed to load index: ${res.status}`);
+				const res = await fetch("data/index.json", { cache: "no-store" });
+				if (!res.ok) throw new Error(`Failed to load manifest (status ${res.status})`);
 				const data = await res.json();
 
-				// Populate dropdown
 				select.innerHTML = "";
 				for (const item of data) {
 					const opt = document.createElement("option");
@@ -88,7 +99,6 @@
 				}
 				select.disabled = false;
 
-				// Choose initial item
 				let current = data[0];
 				if (initialId) {
 					const found = data.find(d => d.id === initialId);
@@ -97,13 +107,11 @@
 				select.value = current.id;
 				show(current);
 
-				// Handle change
 				select.addEventListener("change", () => {
 					const next = data.find(d => d.id === select.value);
 					show(next);
 				});
 
-				// Basic 404 handler for images
 				img.addEventListener("error", () => setStatus("Couldn't load that image (404)."));
 				img.addEventListener("load", () => setStatus(""));
 			} catch (err) {
